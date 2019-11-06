@@ -1,3 +1,6 @@
+0.4.6:
+        - Transects can be added to casts
+	- Load casts works
 0.4.5:
         - several bugfixes for stability
 	- improved relative path saving

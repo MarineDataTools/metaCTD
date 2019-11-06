@@ -214,6 +214,8 @@ class casttableWidget(QtWidgets.QTableWidget,):
     plot_signal = QtCore.pyqtSignal(object,str) # Create a custom signal for plotting
     station_signal = QtCore.pyqtSignal(object) # Create a custom signal for adding the cast to station
     remstation_signal = QtCore.pyqtSignal(object) # Create a custom signal for removing the cast to station
+    transect_signal = QtCore.pyqtSignal(object) # Create a custom signal for adding the cast to transect
+    remtransect_signal = QtCore.pyqtSignal(object) # Create a custom signal for removing the cast to transect
     campaign_signal = QtCore.pyqtSignal(object) # Create a custom signal for adding the cast to campaign
     remcampaign_signal = QtCore.pyqtSignal(object) # Create a custom signal for removing the cast to campaign
     comment_signal = QtCore.pyqtSignal(object) # Create a custom signal for adding the cast to station
@@ -230,14 +232,22 @@ class casttableWidget(QtWidgets.QTableWidget,):
         self.menu = QtWidgets.QMenu(self)
         plotAction = QtWidgets.QAction('Add to map', self)
         plotAction.triggered.connect(self.plot_map)
+        # Station
         stationAction = QtWidgets.QAction('Add to Station', self)
         stationAction.triggered.connect(self.station)
         stationRemAction = QtWidgets.QAction('Rem from Station', self)
         stationRemAction.triggered.connect(self.rem_station)
+        # Transect
+        transectAction = QtWidgets.QAction('Add to Transect', self)
+        transectAction.triggered.connect(self.transect)
+        transectRemAction = QtWidgets.QAction('Rem from Transect', self)
+        transectRemAction.triggered.connect(self.rem_transect)        
+        # Campaign
         campaignAction = QtWidgets.QAction('Add to Campaign', self)
         campaignAction.triggered.connect(self.campaign)
         campaignRemAction = QtWidgets.QAction('Rem from Campaign', self)
-        campaignRemAction.triggered.connect(self.rem_campaign)                
+        campaignRemAction.triggered.connect(self.rem_campaign)
+        # plot
         remplotAction = QtWidgets.QAction('Rem from map', self)
         remplotAction.triggered.connect(self.rem_from_map)
         plotcastAction = QtWidgets.QAction('Plot cast', self)
@@ -246,6 +256,8 @@ class casttableWidget(QtWidgets.QTableWidget,):
             
         self.menu.addAction(stationAction)
         self.menu.addAction(stationRemAction)
+        self.menu.addAction(transectAction)
+        self.menu.addAction(transectRemAction)        
         self.menu.addAction(campaignAction)
         self.menu.addAction(campaignRemAction)                
         #self.menu.addAction(plotAction)
@@ -275,6 +287,18 @@ class casttableWidget(QtWidgets.QTableWidget,):
         """
         row_list = self.rows
         self.remstation_signal.emit(row_list) # Emit the signal with the row list and the command
+
+    def transect(self):
+        """ Signal for transect
+        """
+        row_list = self.rows
+        self.transect_signal.emit(row_list) # Emit the signal with the row list and the command
+
+    def rem_transect(self):
+        """ Signal for removing transect
+        """
+        row_list = self.rows
+        self.remtransect_signal.emit(row_list) # Emit the signal with the row list and the command        
 
     def campaign(self):
         """ Signal for campaign
@@ -327,6 +351,8 @@ class mainWidget(QtWidgets.QWidget):
         self.file_table.plot_signal.connect(self.plot_signal) # Custom signal for plotting
         self.file_table.station_signal.connect(self.station_signal) # Custom signal for adding casts to station
         self.file_table.remstation_signal.connect(self.remstation_signal) # Custom signal for adding casts to station
+        self.file_table.transect_signal.connect(self.transect_signal) # Custom signal for adding casts to transect
+        self.file_table.remtransect_signal.connect(self.remstation_signal) # Custom signal for adding casts to station        
         self.file_table.campaign_signal.connect(self.campaign_signal) # Custom signal for adding casts to campaign
         self.file_table.remcampaign_signal.connect(self.remcampaign_signal) # Custom signal for adding casts to campaign       
         self.file_table.cellChanged.connect(self.table_changed)
@@ -336,7 +362,7 @@ class mainWidget(QtWidgets.QWidget):
         self.columns['lon']              = 1
         self.columns['lat']              = 2
         self.columns['station (File)']   = 3
-        self.columns['station (Custom)'] = 4
+        self.columns['station/Transect'] = 4
         self.columns['campaign']         = 5
         self.columns['comment']          = 6        
         self.columns['file']             = 7
@@ -887,6 +913,13 @@ class mainWidget(QtWidgets.QWidget):
             pass
         
         self.plot_map()
+
+    def remtransect_signal(self,rows):
+        #print('Removing stations')
+        for row in rows:        
+            self.data['metaCTD_transect'][row] = None
+
+        self.update_table()        
         
     def remstation_signal(self,rows):
         #print('Removing stations')
@@ -900,7 +933,36 @@ class mainWidget(QtWidgets.QWidget):
         for row in rows:        
             self.data['metaCTD_campaign'][row] = None
 
-        self.update_table()        
+        self.update_table()
+
+
+    def transect_signal(self,rows):
+        """ Adding a station to the casts
+        """
+        print('Transect signal')
+        self._station_rows = rows
+        table = self.tran['table']
+        self.station_combo.clear()
+        self.choose_station = {}
+        self.choose_station['type'] = 'transect'        
+        self.choose_station['widget'] = QtWidgets.QWidget()
+        self.choose_station['layout'] = QtWidgets.QGridLayout(self.choose_station['widget'])
+        table_choose = QtWidgets.QTableWidget()
+        table_choose.setColumnCount(1)
+        table_choose.setHorizontalHeaderLabels(['Name'])                    
+        for col in range(table.columnCount()):
+            transect_name = table.horizontalHeaderItem(col).text()
+            item = QtWidgets.QTableWidgetItem( transect_name )            
+            table_choose.insertRow(col)
+            table_choose.setItem(col,0,item)
+
+        table_choose.resizeColumnsToContents()
+        self.choose_station['button_add'] = QtWidgets.QPushButton('Add')
+        self.choose_station['button_add'].clicked.connect(self._table_choose_add_to_casts)
+        self.choose_station['layout'].addWidget(table_choose,0,0,1,2)
+        self.choose_station['layout'].addWidget(self.choose_station['button_add'],1,0)
+        self.choose_station['table'] = table_choose            
+        self.choose_station['widget'].show()        
         
     def station_signal(self,rows):
         """ Adding a station to the casts
@@ -909,6 +971,7 @@ class mainWidget(QtWidgets.QWidget):
         table = self.stations['station_table']
         self.station_combo.clear()
         self.choose_station = {}
+        self.choose_station['type'] = 'station'
         self.choose_station['widget'] = QtWidgets.QWidget()
         self.choose_station['layout'] = QtWidgets.QGridLayout(self.choose_station['widget'])
         table_choose = QtWidgets.QTableWidget()
@@ -946,7 +1009,10 @@ class mainWidget(QtWidgets.QWidget):
         for row in rows:
             print('Row %d is selected in station table: ' % row)
             #item = QtWidgets.QTableWidgetItem( stations )
-            self.data['metaCTD_station'][row] = stations                    
+            if(self.choose_station['type'] == 'station'):
+                self.data['metaCTD_station'][row] = stations
+            else:
+                self.data['metaCTD_transect'][row] = stations
             #self.file_table.setItem(row,self.columns['station (Custom)'], item)                        
 
 
@@ -1136,7 +1202,7 @@ class mainWidget(QtWidgets.QWidget):
             #fname = fname.replace(self.foldername,'.') # TODO, check if filesep is needed for windows
             self.data['info_dict'][i]['file_rel'] = fname_rel            
 
-    def compare_and_merge_data(self, data, data_new, new_station=True, new_comment=True, new_campaign=True):
+    def compare_and_merge_data(self, data, data_new, new_station=True, new_comment=True, new_transect = True, new_campaign=True):
         """ Checks in data field if new data is already there, if not it adds it, otherwise it rejects it, it also add metaCTD specific data fields, if they not already exist
         """
         
@@ -1149,6 +1215,11 @@ class mainWidget(QtWidgets.QWidget):
             data_new['metaCTD_station']
         except:
             data_new['metaCTD_station'] = [None] * len(data_new['info_dict']) # station information
+
+        try:
+            data_new['metaCTD_transect']
+        except:
+            data_new['metaCTD_transect'] = [None] * len(data_new['info_dict']) # station information            
 
         try:
             data_new['metaCTD_campaign']
@@ -1174,6 +1245,10 @@ class mainWidget(QtWidgets.QWidget):
                     if(new_station):
                         if(data_new['metaCTD_station'][i_new] is not None):
                             data['metaCTD_station'][i] = data_new['metaCTD_station'][i_new]
+
+                    if(new_transect):
+                        if(data_new['metaCTD_transect'][i_new] is not None):
+                            data['metaCTD_transect'][i] = data_new['metaCTD_transect'][i_new]                            
                             
                     if(new_comment):
                         if(data_new['metaCTD_comment'][i_new] is not None):
@@ -1189,6 +1264,7 @@ class mainWidget(QtWidgets.QWidget):
                 data['info_dict'].append(data_new['info_dict'][i_new])
                 data['metaCTD_plot_map'].append(data_new['metaCTD_plot_map'][i_new])                
                 data['metaCTD_station'].append(data_new['metaCTD_station'][i_new])
+                data['metaCTD_transect'].append(data_new['metaCTD_transect'][i_new])
                 data['metaCTD_comment'].append(data_new['metaCTD_comment'][i_new])
                 data['metaCTD_campaign'].append(data_new['metaCTD_campaign'][i_new])
 
@@ -1214,6 +1290,7 @@ class mainWidget(QtWidgets.QWidget):
         """
         self.data['info_dict'].pop(i)
         self.data['metaCTD_station'].pop(i)
+        self.data['metaCTD_transect'].pop(i)        
         self.data['metaCTD_campaign'].pop(i)
         self.data['metaCTD_comment'].pop(i)
         
@@ -1250,14 +1327,18 @@ class mainWidget(QtWidgets.QWidget):
             item.setFlags(item.flags() ^ QtCore.Qt.ItemIsEditable) # Unset to not have it editable
             self.file_table.setItem(i,self.columns['station (File)'], item)
             # Custom station as defined in metaCTD
-            stat = self.data['metaCTD_station'][i]
+            stat      = self.data['metaCTD_station'][i]
+            str_stat = ''
             if(stat is not None):
-                item = QtWidgets.QTableWidgetItem( str(stat) )
-            else:
-                item = QtWidgets.QTableWidgetItem( str('') )
+                str_stat = str(stat)
 
+            stat_tran = self.data['metaCTD_transect'][i]                
+            if(stat_tran is not None):
+                str_stat += '\n' + stat_tran
+
+            item = QtWidgets.QTableWidgetItem( str_stat )                
             item.setFlags(item.flags() ^ QtCore.Qt.ItemIsEditable) # Unset to not have it editable                
-            self.file_table.setItem(i,self.columns['station (Custom)'], item)
+            self.file_table.setItem(i,self.columns['station/Transect'], item)
 
             # Campaign as defined in metaCTD
             stat = self.data['metaCTD_campaign'][i]
@@ -1372,6 +1453,7 @@ class mainWidget(QtWidgets.QWidget):
             station['name'] = table.item(row,0).text()
             station['lon'] = float(table.item(row,1).text())
             station['lat'] = float(table.item(row,2).text())
+            station['comment'] = table.item(row,3).text()
 
             yaml_dict['stations'].append(station)
 
@@ -1405,11 +1487,17 @@ class mainWidget(QtWidgets.QWidget):
         yaml_dict['casts']   = copy.deepcopy(self.data['info_dict'])
         # Convert datetime objects into something readable
         for i,d in enumerate(yaml_dict['casts']):
+            yaml_dict['casts'][i]['station_file'] = yaml_dict['casts'][i].pop('station')
             yaml_dict['casts'][i]['date'] = str(d['date'])
             if(self.data['metaCTD_station'][i] is not None):
-                yaml_dict['casts'][i]['station metaCTD'] = self.data['metaCTD_station'][i]
+                yaml_dict['casts'][i]['station'] = self.data['metaCTD_station'][i]
             else:
-                yaml_dict['casts'][i]['station metaCTD'] = ''
+                yaml_dict['casts'][i]['station'] = ''
+
+            if(self.data['metaCTD_transect'][i] is not None):
+                yaml_dict['casts'][i]['transect'] = self.data['metaCTD_transect'][i]
+            else:
+                yaml_dict['casts'][i]['transect'] = ''                
 
             if(self.data['metaCTD_comment'][i] is not None):
                 yaml_dict['casts'][i]['comment'] = self.data['metaCTD_comment'][i]
@@ -1457,8 +1545,8 @@ class mainWidget(QtWidgets.QWidget):
         
         return {'campaigns':campaigns}
         
-
     def create_cruise_summary(self):
+        # Legacy
         """ outdated, candidate to remove
         """
         try:
@@ -1495,7 +1583,6 @@ class mainWidget(QtWidgets.QWidget):
         if(len(filename_all) == 0):
             return
 
-
         # Opening the yaml file
         try:
             stream = open(filename_all, 'r')
@@ -1517,10 +1604,60 @@ class mainWidget(QtWidgets.QWidget):
             self.station_add_from_dict(stations_yaml = data_yaml)
 
         if('transects' in data_yaml):
+            try:
+                transects_yaml['transects']['name']
+            except:
+                return
+
             print('Having transects')
-            self.transect_add_from_dict(data_yaml)                                    
+            self.transect_add_from_dict(data_yaml)
+
+        if('casts' in data_yaml):
+            print('Having casts')
+            self.casts_add_from_dict(data_yaml)
+
+    def casts_add_from_dict(self,data_yaml):
+        data = {}
+        data['metaCTD_station']   = []
+        data['metaCTD_transect']  = []
+        data['metaCTD_campaign']  = []
+        data['metaCTD_comment']   = []        
+        # Fill the data structure again
+        data['info_dict'] = data_yaml['casts']        
+        for i,c in enumerate(data['info_dict']):
+            
+            # Fill in metaCTD specific stuff
+            try:
+                data['metaCTD_station'].append(c['station'])
+            except Exception as e:
+                data['metaCTD_station'].append(None)
+
+            data['info_dict'][i]['station'] = data['info_dict'][i].pop('station_file') # Rename station_file to station
+            try:
+                data['metaCTD_transect'].append(c['transect'])
+            except Exception as e:
+                data['metaCTD_transect'].append(None)                
+
+            try:
+                data['metaCTD_comment'].append(c['comment'])
+            except Exception as e:
+                data['metaCTD_comment'].append(None)
+
+            try:
+                data['metaCTD_campaign'].append(c['campaign'])
+            except Exception as e:
+                data['metaCTD_campaign'].append(None)                                
+                
+            date = datetime.datetime.strptime(c['date'],'%Y-%m-%d %H:%M:%S%z')
+            data['info_dict'][i]['date'] = date
+
+            
+        self.data = self.compare_and_merge_data(self.data,data)        
+        self.create_table()
+        self.update_table()
 
     def load_summary(self):
+        # Legacy, can be removed
         filename_all,extension  = QtWidgets.QFileDialog.getOpenFileName(self,"Choose existing summary file","","YAML File (*.yaml);;All Files (*)")
         filename                =  os.path.basename(filename_all) # Get the filename
         dirname                 =  os.path.dirname(filename_all)  # Get the path
@@ -1541,7 +1678,9 @@ class mainWidget(QtWidgets.QWidget):
 
         data = {}
         data['metaCTD_station']   = []
-        data['metaCTD_comment']   = []
+        data['metaCTD_transect']  = []
+        data['metaCTD_campaign']  = []
+        data['metaCTD_comment']   = []        
         # Fill the data structure again
         data['info_dict'] = data_yaml['casts']        
         for i,c in enumerate(data['info_dict']):
@@ -1550,6 +1689,11 @@ class mainWidget(QtWidgets.QWidget):
                 data['metaCTD_station'].append(c['station'])
             except Exception as e:
                 data['metaCTD_station'].append(None)
+
+            try:
+                data['metaCTD_transect'].append(c['transect'])
+            except Exception as e:
+                data['metaCTD_transect'].append(None)                
 
             try:
                 data['metaCTD_comment'].append(c['comment'])
@@ -1571,6 +1715,7 @@ class mainWidget(QtWidgets.QWidget):
 
         
     def cruise_information(self):
+        # Legacy, can be removed soon
         # Check if we have a cruise fields, otherwise create one
         try:
             self._cruise_fields['Cruise name']
@@ -1659,7 +1804,7 @@ class mainWidget(QtWidgets.QWidget):
         """
         table = self.stations['station_table'] 
         nrows = table.rowCount()
-        ncols = table.columnCount()        
+        ncols = table.columnCount()
         for i,name in enumerate(transects_yaml['transects']['name']):
             # Adding a new column for the transect
             table = self.stations['station_table']
@@ -1683,18 +1828,23 @@ class mainWidget(QtWidgets.QWidget):
     def station_add_from_dict(self, stations_yaml = None):        
 #    def add_station_file_dict(self, stations_file = None, stations_yaml = None):
         for i,station in enumerate(stations_yaml['stations']):
-            name = station['name']
-            #lon  = station['longitude']
-            #lat  = station['latitude']
-            lon  = station['lon']
-            lat  = station['lat']                
-            self._station_add(name,lon,lat,update_table=False)
+            name  = station['name']
+            try:
+                lon  = station['longitude']
+                lat  = station['latitude']
+            except:
+                lon   = station['lon']
+                lat   = station['lat']
+            try:
+                desc  = station['comment']
+            except:
+                desc = ''
+                
+            self._station_add(name,lon,lat,comment = desc,update_table=False)
 
         self._update_station_table()            
 
         
-        
-
 
 class metaCTDMainWindow(QtWidgets.QMainWindow):
     def __init__(self,logging_level=logging.INFO):
