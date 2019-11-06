@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 import os
 
 ROOT_DIR='metaCTD'
@@ -20,7 +20,7 @@ setup(name='metaCTD',
       author='Peter Holtermann',
       author_email='peter.holtermann@io-warnemuende.de',
       license='GPLv03',
-      packages=['metaCTD'],
+      packages=find_packages(),
       scripts = [],
       entry_points={ 'console_scripts': ['metaCTD=metaCTD.gui.metaCTD_gui:main']},
       package_data = {'':['VERSION','stations/iow_stations.yaml','ships/ships.yaml']},

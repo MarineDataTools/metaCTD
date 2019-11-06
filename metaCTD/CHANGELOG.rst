@@ -1,3 +1,7 @@
+0.4.5:
+        - several bugfixes for stability
+	- improved relative path saving
+	- New save_foldername included, to choose were to save the meta files and create a relative path
 0.4.2:
         - renamed to metaCTD
 0.4.1:

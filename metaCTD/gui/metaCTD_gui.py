@@ -35,10 +35,11 @@ except:
 
 # For the map plotting
 import pylab as pl
-import cartopy
-import cartopy.crs as ccrs
-from cartopy.io import shapereader
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER    
+# Removing cartopy as qgis will be used as the map plotting infrastructure
+#import cartopy
+#import cartopy.crs as ccrs
+#from cartopy.io import shapereader
+#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER    
 import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -155,7 +156,6 @@ def create_csv_summary(summary,filename,order=['date','lon','lat','station','fil
     """ Creates a csv summary
     """
     print('Create csv summary in file:' + filename)
-    print(summary)
     try:
         outfile = open(filename, 'w')
     except Exception as e:
@@ -198,13 +198,13 @@ class get_valid_files(QtCore.QThread):
         locale.setlocale(locale.LC_TIME, "C")
         data_tmp = pycnv_sum_folder.get_all_valid_files(self.foldername,loglevel = logging.WARNING,status_function=self.status_function)
         self.data = data_tmp
-        
         if(self.search_mrd):
             data_tmp = pymrd_sum_folder.get_all_valid_files(self.foldername,loglevel = logging.WARNING,status_function=self.status_function)
             if True:
                 for key in self.data.keys():
                     self.data[key].extend(data_tmp[key])
-        
+
+        time.sleep(.1) # This is a very weird hack, I included to have the progress bar disappearing when nothing is found, otherwise it stays if the thread is finished immediately
         
     def status_function(self,i,nf,f):
         self.search_status.emit(self,i,nf,f)
@@ -317,10 +317,12 @@ class mainWidget(QtWidgets.QWidget):
         self.search_button.clicked.connect(self.search_clicked)
         self.clear_table_button = QtWidgets.QPushButton('Clear table')
         self.clear_table_button.clicked.connect(self.clear_table_clicked)
+        self.rem_cast_button = QtWidgets.QPushButton('Rem casts')
+        self.rem_cast_button.clicked.connect(self.rem_cast_clicked)        
 
         # The table with the casts
-        self.file_table_widget = QtWidgets.QWidget() # The widget housing the file table and the clear button
-        self.file_table_widget_layout = QtWidgets.QVBoxLayout(self.file_table_widget)
+        self.file_table_widget = QtWidgets.QWidget() # The widget housing the file table and widgets needed
+        self.file_table_widget_layout = QtWidgets.QGridLayout(self.file_table_widget)
         self.file_table = casttableWidget(within_qgis=self.within_qgis) # QtWidgets.QTableWidget()
         self.file_table.plot_signal.connect(self.plot_signal) # Custom signal for plotting
         self.file_table.station_signal.connect(self.station_signal) # Custom signal for adding casts to station
@@ -354,9 +356,15 @@ class mainWidget(QtWidgets.QWidget):
             
         #self.file_table.horizontalHeader().setStretchLastSection(True)
         self.file_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.file_table.resizeColumnsToContents()        
-        self.file_table_widget_layout.addWidget(self.file_table)
-        self.file_table_widget_layout.addWidget(self.clear_table_button)
+        self.file_table.resizeColumnsToContents()
+
+        # Setup of the file table widget layout
+        self.file_table_widget_layout.addWidget(self.folder_dialog,0,0)
+        self.file_table_widget_layout.addWidget(self.folder_button,0,1)
+        self.file_table_widget_layout.addWidget(self.search_button,1,0)        
+        self.file_table_widget_layout.addWidget(self.file_table,2,0,1,2)
+        self.file_table_widget_layout.addWidget(self.clear_table_button,3,0)
+        self.file_table_widget_layout.addWidget(self.rem_cast_button,3,1)        
 
         # Station table widget setup
         self.setup_stations_widget()
@@ -375,9 +383,9 @@ class mainWidget(QtWidgets.QWidget):
         self.tabs.addTab(self.plot['widget'],'Plot')
         self.tabs.addTab(self.save['widget'],'Load/Save')        
         self.layout = QtWidgets.QGridLayout(self)
-        self.layout.addWidget(self.folder_dialog,0,0)
-        self.layout.addWidget(self.folder_button,0,1)
-        self.layout.addWidget(self.search_button,1,0)
+        #self.layout.addWidget(self.folder_dialog,0,0)
+        #self.layout.addWidget(self.folder_button,0,1)
+        #self.layout.addWidget(self.search_button,1,0)
         self.layout.addWidget(self.tabs,2,0,1,2)
         #self.layout.addWidget(,3,0)
 
@@ -430,22 +438,35 @@ class mainWidget(QtWidgets.QWidget):
         self.save = {}
         self.save['widget'] = QtWidgets.QWidget()
         # TODO, do the layout right, it looks really bad at the moment
+        self.save['save_folder_dialog'] = QtWidgets.QLineEdit(self)
+        self.save['save_folder_dialog'].setReadOnly(True)
+        self.save['save_folder_dialog'].setText(os.getcwd()) # Take the local directory as a start
+        self.save_foldername = os.getcwd()        
+        self.save['save_folder_button'] = QtWidgets.QPushButton('Save folder')
+        self.save['save_folder_button'].clicked.connect(self.save_folder_clicked)
+        
         self.save['save'] = QtWidgets.QPushButton('Save')
         self.save['save'].clicked.connect(self.save_all)
-        width = self.save['save'].fontMetrics().boundingRect('Save').width() + 7
-        self.save['save_geojson'] = QtWidgets.QPushButton('Export casts/stations/transects to geojson')
+        #width = self.save['save'].fontMetrics().boundingRect('Save').width() + 7
+        self.save['save_geojson'] = QtWidgets.QPushButton('Export to geojson')
         self.save['save_geojson'].clicked.connect(self.save_geojson)        
         self.save['save_csv'] = QtWidgets.QPushButton('Export casts to csv')
         self.save['save_csv'].clicked.connect(self.save_csv)
 
-        self.save['save'].setMaximumWidth(width)
+        #self.save['save'].setMaximumWidth(width)
         self.save['load'] = QtWidgets.QPushButton('Load')
         self.save['load'].clicked.connect(self.load_file)
-        self.save['layout'] = QtWidgets.QGridLayout(self.save['widget'])
-        self.save['layout'].addWidget(self.save['save'],0,0)
-        self.save['layout'].addWidget(self.save['save_geojson'],1,0)                
-        self.save['layout'].addWidget(self.save['save_csv'],2,0)        
-        self.save['layout'].addWidget(self.save['load'],3,0)
+
+        hlayout = QtWidgets.QHBoxLayout()
+        hlayout.addWidget(self.save['save_folder_dialog'])
+        hlayout.addWidget(self.save['save_folder_button'])        
+        self.save['layout'] = QtWidgets.QVBoxLayout(self.save['widget'])
+        self.save['layout'].addLayout(hlayout)        
+        self.save['layout'].addWidget(self.save['save'])
+        self.save['layout'].addWidget(self.save['save_geojson'])                
+        self.save['layout'].addWidget(self.save['save_csv'])        
+        self.save['layout'].addWidget(self.save['load'])
+        self.save['layout'].addStretch()        
         
     def setup_campaign_widget(self):
         self.camp = {}
@@ -908,7 +929,6 @@ class mainWidget(QtWidgets.QWidget):
         self.choose_station['widget'].show()
 
     def _table_choose_add_to_casts(self):
-        print('Hallo!')
         rows = sorted(set(index.row() for index in
                           self.choose_station['table'].selectedIndexes()),reverse=False)
 
@@ -1014,6 +1034,19 @@ class mainWidget(QtWidgets.QWidget):
         #    ax.draw()
         self.cast_figwidget.show()
 
+    def rem_cast_clicked(self):
+        print('Removing')
+
+        rows = sorted(set(index.row() for index in
+                          self.file_table.selectedIndexes()),reverse=True)
+        
+        print(rows)
+        for i in rows:
+            print(i)
+            self.remove_cast(i)
+
+        self.update_table()
+            
     def clear_table_clicked(self):
         try:
             self.data['files']
@@ -1037,6 +1070,14 @@ class mainWidget(QtWidgets.QWidget):
         self.folder_dialog.setText(foldername)
         self.foldername = foldername
 
+    def save_folder_clicked(self):
+        foldername = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory"))
+        self.save['save_folder_dialog'].setText(foldername)
+        self.save_foldername = foldername
+        self.update_rel_pathes()
+        self.create_table()
+        self.update_table()
+
     def search_opts_clicked(self):
         self.search_opts_widget.show()
 
@@ -1049,8 +1090,10 @@ class mainWidget(QtWidgets.QWidget):
             self._progress_bar       = QtWidgets.QProgressBar(self.status_widget)
             #self._thread_stop_button = QtWidgets.QPushButton('Stop')
             #self._thread_stop_button.clicked.connect(self.search_stop)
-            self._f_widget           = QtWidgets.QLabel('Hallo f')
+            self._f_widget           = QtWidgets.QLabel('Filename')
             self._f_widget.setWordWrap(True)
+            self._progress_bar.setMaximum(100)
+            self._progress_bar.setValue(0)
             self.status_layout.addWidget(self._progress_bar,0,0)
             self.status_layout.addWidget(self._f_widget,1,0)
             #self.status_layout.addWidget(self._thread_stop_button,2,0)
@@ -1059,7 +1102,6 @@ class mainWidget(QtWidgets.QWidget):
             self.search_thread.start()
             self.search_thread.search_status.connect(self.status_function)
             self.search_thread.finished.connect(self.search_finished)
-            #pycnv_sum_folder.get_all_valid_files(foldername,status_function=self.status_function)
         else:
             print('Enter a valid folder')
 
@@ -1072,19 +1114,29 @@ class mainWidget(QtWidgets.QWidget):
         #self.status_widget.close()
         
     def search_finished(self):
+        print('Search finished')
         self.status_widget.close()
+        #self.status_widget.visible = False
         data = self.search_thread.data
-        self.data = self.compare_and_merge_data(self.data,data)
-        if(self.FLAG_REL_PATH):
-            for i,c in enumerate(self.data['info_dict']):
-                fname = c['file']
-                fname = fname.replace(self.foldername,'.') # TODO, check if filesep is needed for windows
-                self.data['info_dict'][i]['file'] = fname
+        if(len(data['info_dict']) > 0):
+            self.data = self.compare_and_merge_data(self.data,data)
+            self.update_rel_pathes()
+            self.create_table()
+            self.update_table()
 
-        self.create_table()
-        self.update_table()
+    def update_rel_pathes(self):
+        try:
+            self.data['info_dict']
+        except:
+            return
+        
+        for i,c in enumerate(self.data['info_dict']):
+            fname = c['file']
+            fname_rel = os.path.relpath(fname,self.save_foldername)
+            #fname = fname.replace(self.foldername,'.') # TODO, check if filesep is needed for windows
+            self.data['info_dict'][i]['file_rel'] = fname_rel            
 
-    def compare_and_merge_data(self, data, data_new, new_station=True, new_comment=True):
+    def compare_and_merge_data(self, data, data_new, new_station=True, new_comment=True, new_campaign=True):
         """ Checks in data field if new data is already there, if not it adds it, otherwise it rejects it, it also add metaCTD specific data fields, if they not already exist
         """
         
@@ -1127,6 +1179,10 @@ class mainWidget(QtWidgets.QWidget):
                         if(data_new['metaCTD_comment'][i_new] is not None):
                             data['metaCTD_comment'][i] = data_new['metaCTD_comment'][i_new]
 
+                    if(new_campaign):
+                        if(data_new['metaCTD_campaign'][i_new] is not None):
+                            data['metaCTD_campaign'][i] = data_new['metaCTD_campaign'][i_new]                            
+
                     break
                 
             if(FLAG_SAME == False):
@@ -1134,6 +1190,7 @@ class mainWidget(QtWidgets.QWidget):
                 data['metaCTD_plot_map'].append(data_new['metaCTD_plot_map'][i_new])                
                 data['metaCTD_station'].append(data_new['metaCTD_station'][i_new])
                 data['metaCTD_comment'].append(data_new['metaCTD_comment'][i_new])
+                data['metaCTD_campaign'].append(data_new['metaCTD_campaign'][i_new])
 
 
         return data
@@ -1151,9 +1208,18 @@ class mainWidget(QtWidgets.QWidget):
         n_new_rows = cnt - nrows
         for i in range(n_new_rows):
             self.file_table.insertRow(i)
-            
 
-    def update_table(self):        
+    def remove_cast(self,i):
+        """ Removing cast from the relevant dictionaries
+        """
+        self.data['info_dict'].pop(i)
+        self.data['metaCTD_station'].pop(i)
+        self.data['metaCTD_campaign'].pop(i)
+        self.data['metaCTD_comment'].pop(i)
+        
+    def update_table(self):
+        """ This is handling all pieces of information regarding the casts
+        """
         # Fill the table
         try:
             cnt = len(self.data['info_dict'])
@@ -1211,8 +1277,12 @@ class mainWidget(QtWidgets.QWidget):
             comitem = QtWidgets.QTableWidgetItem( comstr )
             comitem.setFlags(QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
             self.file_table.setItem(i,self.columns['comment'],comitem)
+
+            if(self.FLAG_REL_PATH):                        
+                fname = self.data['info_dict'][i]['file_rel']
+            else:
+                fname = self.data['info_dict'][i]['file']
                 
-            fname = self.data['info_dict'][i]['file']
             item = QtWidgets.QTableWidgetItem( fname )
             item.setFlags(item.flags() ^ QtCore.Qt.ItemIsEditable) # Unset to not have it editable
             self.file_table.setItem(i,self.columns['file'], item)
@@ -1352,9 +1422,11 @@ class mainWidget(QtWidgets.QWidget):
                 yaml_dict['casts'][i]['campaign'] = ''                                
                 
             if(self.FLAG_REL_PATH):
+                fname = yaml_dict['casts'][i]['file_rel']
+            else:
                 fname = yaml_dict['casts'][i]['file']
-                fname = fname.replace(self.foldername,'.') # TODO, check if filesep is needed for windows
-                yaml_dict['casts'][i]['file'] = fname
+                
+            yaml_dict['casts'][i]['file'] = fname
                 
         return yaml_dict
 
