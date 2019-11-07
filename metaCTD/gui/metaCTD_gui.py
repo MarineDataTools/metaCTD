@@ -1882,9 +1882,15 @@ class mainWidget(QtWidgets.QWidget):
             # Add date
             lon     = self.data['info_dict'][i]['lon']
             lat     = self.data['info_dict'][i]['lat']
-            fname   = self.data['info_dict'][i]['file']                        
+            fname   = self.data['info_dict'][i]['file']
+            # Replacing MRD with blank
+            fname = fname.replace('.MRD','')
+            fname = fname.replace('.mrd','')            
             date    = self.data['info_dict'][i]['date'].strftime('%Y-%m-%d %H:%M:%S' )
             tran    = self.data['metaCTD_transect'][i]
+            if(len(tran) == 0): # If there is no transect, try a station instead
+                tran    = self.data['metaCTD_station'][i]
+                
             print(fname,tran,tran_tmp)
             if(tran_tmp == tran): # Filling data for transect
                 tran_dict['lon'].append(lon)
