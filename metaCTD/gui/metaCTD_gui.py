@@ -352,7 +352,7 @@ class mainWidget(QtWidgets.QWidget):
         self.file_table.station_signal.connect(self.station_signal) # Custom signal for adding casts to station
         self.file_table.remstation_signal.connect(self.remstation_signal) # Custom signal for adding casts to station
         self.file_table.transect_signal.connect(self.transect_signal) # Custom signal for adding casts to transect
-        self.file_table.remtransect_signal.connect(self.remstation_signal) # Custom signal for adding casts to station        
+        self.file_table.remtransect_signal.connect(self.remtransect_signal) # Custom signal for adding casts to station        
         self.file_table.campaign_signal.connect(self.campaign_signal) # Custom signal for adding casts to campaign
         self.file_table.remcampaign_signal.connect(self.remcampaign_signal) # Custom signal for adding casts to campaign       
         self.file_table.cellChanged.connect(self.table_changed)
@@ -478,6 +478,9 @@ class mainWidget(QtWidgets.QWidget):
         self.save['save_geojson'].clicked.connect(self.save_geojson)        
         self.save['save_csv'] = QtWidgets.QPushButton('Export casts to csv')
         self.save['save_csv'].clicked.connect(self.save_csv)
+        self.save['save_csv_short'] = QtWidgets.QPushButton('Export csv, sorted by transects')
+        self.save['save_csv_short'].clicked.connect(self.create_csv_station_sorted)        
+        
 
         #self.save['save'].setMaximumWidth(width)
         self.save['load'] = QtWidgets.QPushButton('Load')
@@ -489,9 +492,11 @@ class mainWidget(QtWidgets.QWidget):
         self.save['layout'] = QtWidgets.QVBoxLayout(self.save['widget'])
         self.save['layout'].addLayout(hlayout)        
         self.save['layout'].addWidget(self.save['save'])
+        self.save['layout'].addWidget(self.save['load'])        
         self.save['layout'].addWidget(self.save['save_geojson'])                
-        self.save['layout'].addWidget(self.save['save_csv'])        
-        self.save['layout'].addWidget(self.save['load'])
+        self.save['layout'].addWidget(self.save['save_csv'])
+        self.save['layout'].addWidget(self.save['save_csv_short'])                
+        
         self.save['layout'].addStretch()        
         
     def setup_campaign_widget(self):
@@ -860,6 +865,7 @@ class mainWidget(QtWidgets.QWidget):
                     self.station_combo.setCurrentIndex(cnt-1)
                     
     def _station_apply(self):
+        # Legacy, can be removed
         if True:
             for i in self._station_rows:
                 tran = self.station_combo.currentText()
@@ -919,21 +925,21 @@ class mainWidget(QtWidgets.QWidget):
         for row in rows:        
             self.data['metaCTD_transect'][row] = None
 
-        self.update_table()        
+        self.update_table(rows=rows)        
         
     def remstation_signal(self,rows):
         #print('Removing stations')
         for row in rows:        
             self.data['metaCTD_station'][row] = None
 
-        self.update_table()
+        self.update_table(rows=rows)
 
     def remcampaign_signal(self,rows):
         #print('Removing stations')
         for row in rows:        
             self.data['metaCTD_campaign'][row] = None
 
-        self.update_table()
+        self.update_table(rows=rows)
 
 
     def transect_signal(self,rows):
@@ -1007,7 +1013,7 @@ class mainWidget(QtWidgets.QWidget):
 
 
         for row in rows:
-            print('Row %d is selected in station table: ' % row)
+            print('Row %d is selected in cast table: ' % row)
             #item = QtWidgets.QTableWidgetItem( stations )
             if(self.choose_station['type'] == 'station'):
                 self.data['metaCTD_station'][row] = stations
@@ -1016,7 +1022,7 @@ class mainWidget(QtWidgets.QWidget):
             #self.file_table.setItem(row,self.columns['station (Custom)'], item)                        
 
 
-        self.update_table()
+        self.update_table(rows)
 
 
     def campaign_signal(self,rows):
@@ -1066,7 +1072,7 @@ class mainWidget(QtWidgets.QWidget):
             #self.file_table.setItem(row,self.columns['station (Custom)'], item)                        
 
 
-        self.update_table()        
+        self.update_table(rows=rows)        
 
         
     def plot_signal(self,rows,command):
@@ -1294,15 +1300,20 @@ class mainWidget(QtWidgets.QWidget):
         self.data['metaCTD_campaign'].pop(i)
         self.data['metaCTD_comment'].pop(i)
         
-    def update_table(self):
+    def update_table(self,rows=None):
         """ This is handling all pieces of information regarding the casts
         """
         # Fill the table
-        try:
-            cnt = len(self.data['info_dict'])
-        except:
-            cnt = 0
-        for i in range(cnt):
+        if (rows == None):
+            try:
+                cnt = len(self.data['info_dict'])
+            except:
+                cnt = 0
+
+            rows = range(cnt)
+
+        print('Update table, rows',rows)
+        for i in rows:
             # Add date
             date = self.data['info_dict'][i]['date']
             item = QtWidgets.QTableWidgetItem( date.strftime('%Y-%m-%d %H:%M:%S' ))
@@ -1369,7 +1380,9 @@ class mainWidget(QtWidgets.QWidget):
             self.file_table.setItem(i,self.columns['file'], item)
 
         # Resize the columns
+        print('Resize')
         self.file_table.resizeColumnsToContents()
+        print('done')
         
     def status_function(self,call_object,i,nf,f):
         if(i == 0):
@@ -1487,7 +1500,11 @@ class mainWidget(QtWidgets.QWidget):
         yaml_dict['casts']   = copy.deepcopy(self.data['info_dict'])
         # Convert datetime objects into something readable
         for i,d in enumerate(yaml_dict['casts']):
-            yaml_dict['casts'][i]['station_file'] = yaml_dict['casts'][i].pop('station')
+            try: # Try if we have a station (cnv might have one, MRD does not)
+                yaml_dict['casts'][i]['station_file'] = yaml_dict['casts'][i].pop('station')
+            except:
+                yaml_dict['casts'][i]['station_file'] = ''
+                
             yaml_dict['casts'][i]['date'] = str(d['date'])
             if(self.data['metaCTD_station'][i] is not None):
                 yaml_dict['casts'][i]['station'] = self.data['metaCTD_station'][i]
@@ -1605,7 +1622,7 @@ class mainWidget(QtWidgets.QWidget):
 
         if('transects' in data_yaml):
             try:
-                transects_yaml['transects']['name']
+                data_yaml['transects']['name']
             except:
                 return
 
@@ -1713,7 +1730,6 @@ class mainWidget(QtWidgets.QWidget):
         self.create_table()
         self.update_table()
 
-        
     def cruise_information(self):
         # Legacy, can be removed soon
         # Check if we have a cruise fields, otherwise create one
@@ -1842,7 +1858,72 @@ class mainWidget(QtWidgets.QWidget):
                 
             self._station_add(name,lon,lat,comment = desc,update_table=False)
 
-        self._update_station_table()            
+        self._update_station_table()
+        
+    def create_csv_station_sorted(self):
+        """ creates a csv files which is sorted by stations/transects
+        """
+        rows = None
+        delimiter = ';'
+        # Fill the table
+        if (rows == None):
+            try:
+                cnt = len(self.data['info_dict'])
+            except:
+                cnt = 0
+
+            rows = range(cnt)
+
+        print('Creating csv from rows:',rows)
+        tran_tmp = ''
+        tran_dict_all = []
+        tran_dict = {'lon':[],'lat':[],'date':[],'name':'','fname':[]}        
+        for i in rows:
+            # Add date
+            lon     = self.data['info_dict'][i]['lon']
+            lat     = self.data['info_dict'][i]['lat']
+            fname   = self.data['info_dict'][i]['file']                        
+            date    = self.data['info_dict'][i]['date'].strftime('%Y-%m-%d %H:%M:%S' )
+            tran    = self.data['metaCTD_transect'][i]
+            print(fname,tran,tran_tmp)
+            if(tran_tmp == tran): # Filling data for transect
+                tran_dict['lon'].append(lon)
+                tran_dict['lat'].append(lat)
+                tran_dict['fname'].append(fname)                
+                tran_dict['date'].append(date)                                                
+            else:
+                tran_tmp = tran
+                tran_dict_all.append(tran_dict)
+                    
+                tran_dict = {'lon':[],'lat':[],'date':[],'name':tran,'fname':[]}
+
+        # Append the last one as well
+        tran_dict_all.append(tran_dict)
+        #print(tran_dict_all)
+        csv_header = 'Name ; First cast; Last cast; Start time (UTC); End time (UTC)\n'
+        csv_strs = []
+        for tran in tran_dict_all:
+            if(len(tran['lon']) > 0):
+                csv_str = tran['name'] + delimiter + os.path.basename(tran['fname'][0]) + delimiter + os.path.basename(tran['fname'][-1])
+                csv_str += delimiter + tran['date'][0] + delimiter + tran['date'][-1]
+                csv_str += '\n'
+                csv_strs.append(csv_str)
+                #print(csv_str)
+
+        # Get the file to save it to
+        filename,extension  = QtWidgets.QFileDialog.getSaveFileName(self,"Choose file for saving summary","","CSV File (*.csv);;All Files (*)")        
+        if(len(filename) > 0):
+            if 'csv' in extension and ('.csv' not in filename):
+                filename += '.csv'
+            print(filename)
+            print(extension)
+            f = open(filename, 'w')
+            f.write(csv_header)
+            for csv_str in csv_strs:
+                f.write(csv_str)
+
+            f.close()
+            
 
         
 

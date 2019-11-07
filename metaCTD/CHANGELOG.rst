@@ -1,3 +1,6 @@
+0.4.7:
+        - csv save option for transects included
+	- several bugfixes
 0.4.6:
         - Transects can be added to casts
 	- Load casts works
