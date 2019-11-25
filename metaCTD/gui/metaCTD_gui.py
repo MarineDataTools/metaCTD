@@ -152,7 +152,7 @@ def create_yaml_summary(summary,filename):
         yaml.dump(summary, outfile, default_flow_style=False)
 
 
-def create_csv_summary(summary,filename,order=['date','lon','lat','station','file','comment']):
+def create_csv_summary(summary,filename,order=['date','lon','lat','station_file','station','file','comment'],delimiter=',',dict_name='casts'):
     """ Creates a csv summary
     """
     print('Create csv summary in file:' + filename)
@@ -160,19 +160,20 @@ def create_csv_summary(summary,filename,order=['date','lon','lat','station','fil
         outfile = open(filename, 'w')
     except Exception as e:
         return
-    
+
+    # Write the header information
     csv_line = ''
     for o in order:
-        csv_line += str(o) +','
+        csv_line += str(o) + delimiter
 
-    csv_line = csv_line[:-2]
+    csv_line = csv_line[:-1] + '\n'    
     outfile.write(csv_line)
-    for i,d in enumerate(summary['casts']):
+    for i,d in enumerate(summary):
         csv_line = ''
         for o in order:
-            csv_line += str(d[o]) +','
+            csv_line += str(d[o]) + delimiter
 
-        csv_line = csv_line[:-2] + '\n'
+        csv_line = csv_line[:-1] + '\n'
         outfile.write(csv_line)        
         #print(csv_line)
 
@@ -478,6 +479,8 @@ class mainWidget(QtWidgets.QWidget):
         self.save['save_geojson'].clicked.connect(self.save_geojson)        
         self.save['save_csv'] = QtWidgets.QPushButton('Export casts to csv')
         self.save['save_csv'].clicked.connect(self.save_csv)
+        self.save['save_csv_stations'] = QtWidgets.QPushButton('Export stations to csv')
+        self.save['save_csv_stations'].clicked.connect(self.save_csv_stations)        
         self.save['save_csv_short'] = QtWidgets.QPushButton('Export csv, sorted by transects')
         self.save['save_csv_short'].clicked.connect(self.create_csv_station_sorted)        
         
@@ -495,6 +498,7 @@ class mainWidget(QtWidgets.QWidget):
         self.save['layout'].addWidget(self.save['load'])        
         self.save['layout'].addWidget(self.save['save_geojson'])                
         self.save['layout'].addWidget(self.save['save_csv'])
+        self.save['layout'].addWidget(self.save['save_csv_stations'])        
         self.save['layout'].addWidget(self.save['save_csv_short'])                
         
         self.save['layout'].addStretch()        
@@ -1313,7 +1317,13 @@ class mainWidget(QtWidgets.QWidget):
             rows = range(cnt)
 
         print('Update table, rows',rows)
+        self._progress = QtWidgets.QProgressBar()
+        self._progress.setMaximum(len(rows))
+        self._progress.setGeometry(200, 80, 250, 20)
+        self._progress.show()
         for i in rows:
+            self._progress.setValue(i)
+            QtWidgets.QApplication.processEvents()            
             # Add date
             date = self.data['info_dict'][i]['date']
             item = QtWidgets.QTableWidgetItem( date.strftime('%Y-%m-%d %H:%M:%S' ))
@@ -1343,9 +1353,15 @@ class mainWidget(QtWidgets.QWidget):
             if(stat is not None):
                 str_stat = str(stat)
 
-            stat_tran = self.data['metaCTD_transect'][i]                
+            stat_tran = self.data['metaCTD_transect'][i]
             if(stat_tran is not None):
-                str_stat += '\n' + stat_tran
+                if(len(str_stat) == 0):
+                    delimiter = ''
+                else:
+                    delimiter = ' ; '
+
+                if(len(stat_tran) > 0):
+                    str_stat += delimiter + stat_tran
 
             item = QtWidgets.QTableWidgetItem( str_stat )                
             item.setFlags(item.flags() ^ QtCore.Qt.ItemIsEditable) # Unset to not have it editable                
@@ -1380,6 +1396,7 @@ class mainWidget(QtWidgets.QWidget):
             self.file_table.setItem(i,self.columns['file'], item)
 
         # Resize the columns
+        self._progress.deleteLater()        
         print('Resize')
         self.file_table.resizeColumnsToContents()
         print('done')
@@ -1449,7 +1466,15 @@ class mainWidget(QtWidgets.QWidget):
             filename += '.csv'
 
         yaml_dict    = self.create_cast_summary()
-        create_csv_summary(yaml_dict,filename)
+        create_csv_summary(yaml_dict['casts'],filename)
+
+    def save_csv_stations(self):
+        filename,extension  = QtWidgets.QFileDialog.getSaveFileName(self,"Choose file for csv station summary","","CSV File (*.csv);;All Files (*)")
+        if 'csv' in extension and ('.csv' not in filename):
+            filename += '.csv'
+
+        yaml_dict    = self.create_station_summary()
+        create_csv_summary(yaml_dict['stations'],filename,order = ['name','lon','lat','comment'])        
 
     def create_station_summary(self):
         """ Creates a summary of all stations read in
@@ -1701,6 +1726,7 @@ class mainWidget(QtWidgets.QWidget):
         # Fill the data structure again
         data['info_dict'] = data_yaml['casts']        
         for i,c in enumerate(data['info_dict']):
+            print(c)
             # Fill in metaCTD specific stuff
             try:
                 data['metaCTD_station'].append(c['station'])

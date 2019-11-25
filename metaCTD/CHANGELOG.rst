@@ -1,3 +1,7 @@
+0.4.9:
+        - transect load bugfix, progress bar for updating the table
+0.4.8:
+        - csv bugfixes
 0.4.7:
         - csv save option for transects included
 	- several bugfixes
